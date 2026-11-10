@@ -68,6 +68,13 @@ Copiez `.env.example` si vous souhaitez garder un exemple local, puis définisse
 | `LOCAL_ORDER_CURRENCY` | `TND` | Devise des commandes locales |
 | `PAYMENT_CURRENCY` | `TND` | Devise autorisée par ce service |
 | `SIMULATED_DECLINED_ORDER_IDS` | `1002` | Commandes pour lesquelles la carte simulée est refusée |
+| `RABBITMQ_HOST` | `localhost` | Hôte du broker RabbitMQ |
+| `RABBITMQ_PORT` | `5672` | Port AMQP |
+| `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `guest` / `guest` | Identifiants locaux de démonstration |
+| `RABBITMQ_VIRTUAL_HOST` | `/` | Virtual host RabbitMQ |
+| `RABBITMQ_EXCHANGE` | `payment.events` | Exchange topic durable |
+| `RABBITMQ_QUEUE` | `order-service.payment-succeeded` | Queue durable préparée pour Order Service |
+| `RABBITMQ_ROUTING_KEY` | `payment.succeeded` | Clé de routage de `PaymentSucceededEvent` |
 
 N'enregistrez aucun vrai mot de passe dans le code source ou dans `.env.example`. En environnement protégé, fournissez une URI avec identifiants via une variable d'environnement ou un gestionnaire de secrets.
 
@@ -99,6 +106,29 @@ Le client distant effectue réellement `GET http://localhost:8085/api/orders/{or
 Dans le terminal du projet Order Service, lancez son point d'entrée FastAPI configuré sur le port 8085 avant de démarrer le paiement. Le dépôt Order Service et son module ASGI ne font pas partie de ce workspace ; son nom de module n'étant pas vérifiable ici, la commande exacte `uvicorn <module>:app` dépend de son arborescence.
 
 Pour ne pas conserver l'URI dans la session PowerShell, Spring utilise la valeur locale par défaut si `MONGODB_URI` n'est pas définie.
+
+### Préparer RabbitMQ
+
+La dépendance `spring-boot-starter-amqp` configure `RabbitTemplate`, un
+convertisseur JSON, ainsi qu'un exchange `payment.events`, une queue durable
+`order-service.payment-succeeded` et leur binding topic sur
+`payment.succeeded`. `PaymentSucceededEvent` et `PaymentEventPublisher`
+définissent le contrat et le point de publication pour le cours, mais la
+publication n'est volontairement pas appelée par le traitement actuel des
+paiements. Les appels REST à `order-service` et les transitions de statut sont
+inchangés.
+
+Démarrez un broker local avant de tester cette connexion :
+
+```powershell
+docker run --name ecommerce-rabbitmq --rm `
+  -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+```
+
+Vérifiez ensuite réellement `localhost:5672` (ou l'interface
+`http://localhost:15672`) avant d'affirmer que RabbitMQ est opérationnel. La
+configuration et les tests unitaires peuvent être exécutés sans broker ; cette
+validation n'a pas été remplacée par un simple test de contexte Spring.
 
 ## 5. Tester l'API avec Swagger
 

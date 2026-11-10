@@ -4,6 +4,12 @@ server:
 spring:
   application:
     name: payment-service
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: ${RABBITMQ_VIRTUAL_HOST:/}
   data:
     mongodb:
       uri: ${MONGODB_URI:mongodb://localhost:27017/payment_db}
@@ -33,6 +39,11 @@ payment:
     currency: ${LOCAL_ORDER_CURRENCY:TND}
   simulator:
     declined-order-ids: ${SIMULATED_DECLINED_ORDER_IDS:1002}
+
+rabbitmq:
+  exchange: ${RABBITMQ_EXCHANGE:payment.events}
+  queue: ${RABBITMQ_QUEUE:order-service.payment-succeeded}
+  routing-key: ${RABBITMQ_ROUTING_KEY:payment.succeeded}
 
 springdoc:
   swagger-ui:

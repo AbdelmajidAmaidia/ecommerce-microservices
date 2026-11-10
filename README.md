@@ -41,6 +41,7 @@ L'objectif est de séparer les responsabilités de gestion des commandes et des 
 \- Gestion des paiements simulés
 
 \- Communication REST entre Order Service et Payment Service
+\- Préparation de la communication asynchrone RabbitMQ (`PaymentSucceededEvent`)
 
 \- Découverte des microservices avec Eureka
 
@@ -73,6 +74,13 @@ Payment Service gère les paiements et utilise MongoDB.
 
 
 Payment Service récupère les informations de commande auprès de Order Service avant de traiter un paiement.
+
+La communication REST reste le mécanisme de lecture et de vérification des
+commandes. RabbitMQ est préparé en parallèle avec l'exchange
+`payment.events`, la queue `order-service.payment-succeeded` et la clé
+`payment.succeeded`; aucun traitement métier ni changement de statut n'est
+encore branché sur cet événement. Eureka, API Gateway et un éventuel
+Notification Service ne sont pas modifiés dans cette étape.
 
 
 
@@ -131,4 +139,3 @@ Les instructions détaillées de démarrage des services seront ajoutées après
 
 
 Projet académique - Architecture Microservices E-commerce.
-

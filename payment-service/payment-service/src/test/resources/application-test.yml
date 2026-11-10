@@ -1,4 +1,6 @@
 spring:
+  rabbitmq:
+    dynamic: false
   data:
     mongodb:
       auto-index-creation: true

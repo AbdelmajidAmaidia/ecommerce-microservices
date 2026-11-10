@@ -30,6 +30,38 @@ adresse IP ou un nom d'hôte joignable depuis ces machines. Une panne ou une
 indisponibilité temporaire d'Eureka est journalisée sans empêcher FastAPI de
 démarrer. La valeur `EUREKA_ENABLED=false` désactive l'intégration.
 
+### Préparer RabbitMQ
+
+Le service inclut `pika` et partage la topologie suivante avec
+`payment-service` :
+
+| Paramètre | Valeur par défaut |
+| --- | --- |
+| Hôte / port | `localhost:5672` |
+| Exchange durable | `payment.events` (`topic`) |
+| Queue durable | `order-service.payment-succeeded` |
+| Routing key | `payment.succeeded` |
+| Événement | `PaymentSucceededEvent` |
+
+Les paramètres sont disponibles dans `.env.example`. Le module
+`app.messaging.rabbitmq` fournit la lecture de configuration, la création
+explicite d'une connexion et la déclaration de l'exchange, de la queue et du
+binding. Il ne se connecte pas automatiquement au démarrage de FastAPI :
+RabbitMQ reste donc optionnel tant qu'aucun consommateur n'est activé.
+
+Après installation des dépendances, démarrez un broker local, par exemple :
+
+```powershell
+docker run --name ecommerce-rabbitmq --rm `
+  -p 5672:5672 -p 15672:15672 rabbitmq:3-management
+```
+
+La connexion réelle doit être vérifiée séparément (par exemple avec
+`Test-NetConnection localhost -Port 5672` ou l'interface
+`http://localhost:15672`, identifiants locaux `guest`/`guest`) avant de
+considérer le broker disponible. Cette préparation ne remplace pas les
+appels REST existants entre les services.
+
 Initialisez les tables `orders` et `order_items` :
 
 ```powershell
