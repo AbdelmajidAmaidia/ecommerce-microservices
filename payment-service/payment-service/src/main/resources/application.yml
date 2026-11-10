@@ -1,0 +1,39 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: payment-service
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/payment_db}
+      auto-index-creation: true
+
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+
+payment:
+  currency: ${PAYMENT_CURRENCY:TND}
+  order-client:
+    mode: ${ORDER_CLIENT_MODE:local}
+    base-url: ${ORDER_SERVICE_BASE_URL:${ORDER_SERVICE_URL:http://localhost:8085}}
+    connect-timeout: ${ORDER_SERVICE_CONNECT_TIMEOUT:2s}
+    read-timeout: ${ORDER_SERVICE_READ_TIMEOUT:3s}
+  local-orders:
+    ids: ${LOCAL_ORDER_IDS:1001,1002}
+    amount: ${LOCAL_ORDER_AMOUNT:49.99}
+    currency: ${LOCAL_ORDER_CURRENCY:TND}
+  simulator:
+    declined-order-ids: ${SIMULATED_DECLINED_ORDER_IDS:1002}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
