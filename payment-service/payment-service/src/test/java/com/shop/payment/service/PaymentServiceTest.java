@@ -14,6 +14,7 @@ import com.shop.payment.exception.OrderNotPayableException;
 import com.shop.payment.exception.OrderServiceUnavailableException;
 import com.shop.payment.exception.PaymentNotFoundException;
 import com.shop.payment.exception.UnsupportedCurrencyException;
+import com.shop.payment.messaging.PaymentProducer;
 import com.shop.payment.repository.PaymentRepository;
 import org.springframework.dao.DuplicateKeyException;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,12 +42,14 @@ class PaymentServiceTest {
     private OrderClient orderClient;
     @Mock
     private PaymentSimulator simulator;
+    @Mock
+    private PaymentProducer paymentProducer;
 
     private PaymentService paymentService;
 
     @BeforeEach
     void setUp() {
-        paymentService = new PaymentService(paymentRepository, orderClient, simulator, "TND");
+        paymentService = new PaymentService(paymentRepository, orderClient, simulator, paymentProducer, "TND");
     }
 
     @Test
@@ -65,6 +68,7 @@ class PaymentServiceTest {
 
         assertEquals(new BigDecimal("32.50"), response.amount());
         assertEquals(PaymentStatus.SUCCEEDED, response.status());
+        verify(paymentProducer).publish(any());
     }
 
     @Test
@@ -74,6 +78,20 @@ class PaymentServiceTest {
 
         assertThrows(OrderNotFoundException.class, () -> paymentService.create(
                 new CreatePaymentRequest(999L, PaymentMethod.SIMULATED_CARD, "key")));
+    }
+
+    @Test
+    void doesNotPublishDeclinedPayment() {
+        when(paymentRepository.findByIdempotencyKey("declined-key")).thenReturn(Optional.empty());
+        when(orderClient.findOrder(1002L))
+                .thenReturn(Optional.of(new OrderDetails(1002L, BigDecimal.TEN, "TND")));
+        when(simulator.simulate(1002L, PaymentMethod.SIMULATED_CARD)).thenReturn(PaymentStatus.FAILED);
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        paymentService.create(
+                new CreatePaymentRequest(1002L, PaymentMethod.SIMULATED_CARD, "declined-key"));
+
+        verify(paymentProducer, never()).publish(any());
     }
 
     @Test

@@ -151,3 +151,17 @@ python tests/test_mysql.py
 ## Initialisation et erreurs
 
 Les tables sont créées explicitement avec `python -m app.init_db`, après configuration et création de la base MySQL. Les erreurs applicatives et de validation utilisent une réponse JSON centralisée. Les détails techniques des erreurs internes sont consignés dans les logs du serveur, sans être renvoyés au client.
+
+## Worker RabbitMQ
+
+Le worker `app.messaging.worker` consomme les événements JSON `PaymentSucceededEvent` sur `payment.succeeded.queue`. Il déclare durablement l'exchange direct `payment.exchange`, la queue et son binding, puis confirme une commande avec la transition métier existante `pending -> confirmed`.
+
+Lancez-le dans un terminal séparé du serveur HTTP :
+
+```powershell
+$env:RABBITMQ_USERNAME = "ecommerce_app"
+$env:RABBITMQ_PASSWORD = "<mot-de-passe-local>"
+python -m app.messaging.worker
+```
+
+Les messages JSON invalides et les commandes inconnues sont ACKés avec un log explicite afin d'éviter une boucle infinie. Les erreurs SQL temporaires sont retentées au maximum `RABBITMQ_MAX_RETRIES` fois (3 par défaut), puis rejetées. Les variables `RABBITMQ_*` sont listées dans `.env.example`.

@@ -4,6 +4,7 @@ import com.shop.payment.client.OrderClient;
 import com.shop.payment.dto.CreatePaymentRequest;
 import com.shop.payment.dto.OrderDetails;
 import com.shop.payment.dto.PaymentResponse;
+import com.shop.payment.dto.PaymentSucceededEvent;
 import com.shop.payment.entity.Payment;
 import com.shop.payment.enums.PaymentStatus;
 import com.shop.payment.exception.IdempotencyConflictException;
@@ -13,6 +14,7 @@ import com.shop.payment.exception.OrderNotFoundException;
 import com.shop.payment.exception.OrderNotPayableException;
 import com.shop.payment.exception.PaymentNotFoundException;
 import com.shop.payment.exception.UnsupportedCurrencyException;
+import com.shop.payment.messaging.PaymentProducer;
 import com.shop.payment.repository.PaymentRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
@@ -28,17 +30,20 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final OrderClient orderClient;
     private final PaymentSimulator paymentSimulator;
+    private final PaymentProducer paymentProducer;
     private final String supportedCurrency;
 
     public PaymentService(
             PaymentRepository paymentRepository,
             OrderClient orderClient,
             PaymentSimulator paymentSimulator,
+            PaymentProducer paymentProducer,
             @Value("${payment.currency:TND}") String supportedCurrency
     ) {
         this.paymentRepository = paymentRepository;
         this.orderClient = orderClient;
         this.paymentSimulator = paymentSimulator;
+        this.paymentProducer = paymentProducer;
         this.supportedCurrency = supportedCurrency.toUpperCase(Locale.ROOT);
     }
 
@@ -49,6 +54,7 @@ public class PaymentService {
             if (!payment.getOrderId().equals(request.orderId()) || payment.getMethod() != request.method()) {
                 throw new IdempotencyConflictException();
             }
+            publishIfSucceeded(payment);
             return PaymentResponse.from(payment);
         }
 
@@ -76,9 +82,17 @@ public class PaymentService {
                 request.idempotencyKey()
         );
         try {
-            return PaymentResponse.from(paymentRepository.save(payment));
+            Payment savedPayment = paymentRepository.save(payment);
+            publishIfSucceeded(savedPayment);
+            return PaymentResponse.from(savedPayment);
         } catch (DuplicateKeyException exception) {
             throw new IdempotencyConflictException();
+        }
+    }
+
+    private void publishIfSucceeded(Payment payment) {
+        if (payment.getStatus() == PaymentStatus.SUCCEEDED) {
+            paymentProducer.publish(PaymentSucceededEvent.from(payment.getId(), payment.getOrderId()));
         }
     }
 
@@ -110,6 +124,8 @@ public class PaymentService {
         } catch (IllegalStateException exception) {
             throw new InvalidPaymentTransitionException();
         }
-        return PaymentResponse.from(paymentRepository.save(payment));
+        Payment savedPayment = paymentRepository.save(payment);
+        publishIfSucceeded(savedPayment);
+        return PaymentResponse.from(savedPayment);
     }
 }
