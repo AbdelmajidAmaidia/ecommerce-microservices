@@ -96,3 +96,12 @@ def cancel_order(db: Session, order_id: int) -> Order:
     return update_order_status(
         db, order_id=order_id, new_status=OrderStatus.CANCELLED
     )
+
+
+def confirm_payment(db: Session, *, order_id: int) -> Order:
+    order = get_order(db, order_id)
+    if order.status == OrderStatus.CONFIRMED:
+        return order
+    return update_order_status(
+        db, order_id=order_id, new_status=OrderStatus.CONFIRMED
+    )

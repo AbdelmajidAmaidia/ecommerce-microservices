@@ -155,3 +155,9 @@ N'utilisez jamais la base de développement `payment_db` comme base de test.
 ## Notes de migration
 
 La persistance utilise Spring Data MongoDB et `MongoRepository`. L'index d'idempotence est partiel pour ignorer les valeurs absentes ou nulles, mais l'API exige une clé non vide. Le simulateur reste pédagogique : il ne réalise ni autorisation bancaire, ni capture, ni remboursement, ni notification de `order-service`.
+
+## Publication RabbitMQ
+
+Après la sauvegarde MongoDB d'un paiement `SUCCEEDED`, Payment Service publie un JSON `PaymentSucceededEvent` vers l'exchange direct `payment.exchange` avec la routing key `payment.succeeded`. Le consommateur Order Service déclare la queue durable `payment.succeeded.queue` et confirme la commande de `pending` à `confirmed`. Les paramètres `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`, `RABBITMQ_VIRTUAL_HOST`, `RABBITMQ_PAYMENT_EXCHANGE` et `RABBITMQ_PAYMENT_ROUTING_KEY` sont configurables par environnement.
+
+La publication simple n'est pas atomique avec MongoDB : une panne RabbitMQ après l'enregistrement peut laisser un paiement sans événement. L'erreur est journalisée et une répétition idempotente peut retenter la publication ; une outbox serait nécessaire en production.

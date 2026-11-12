@@ -8,6 +8,12 @@ spring:
     mongodb:
       uri: ${MONGODB_URI:mongodb://localhost:27017/payment_db}
       auto-index-creation: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:}
+    password: ${RABBITMQ_PASSWORD:}
+    virtual-host: ${RABBITMQ_VIRTUAL_HOST:/}
 
 
 eureka:
@@ -33,6 +39,9 @@ payment:
     currency: ${LOCAL_ORDER_CURRENCY:TND}
   simulator:
     declined-order-ids: ${SIMULATED_DECLINED_ORDER_IDS:1002}
+  messaging:
+    exchange: ${RABBITMQ_PAYMENT_EXCHANGE:payment.exchange}
+    routing-key: ${RABBITMQ_PAYMENT_ROUTING_KEY:payment.succeeded}
 
 springdoc:
   swagger-ui:
