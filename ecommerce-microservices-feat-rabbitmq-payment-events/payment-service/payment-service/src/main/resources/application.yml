@@ -1,0 +1,66 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: payment-service
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/EcommerceRealm}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://localhost:8180/realms/EcommerceRealm/protocol/openid-connect/certs}
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://localhost:27017/payment_db}
+      auto-index-creation: true
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:}
+    password: ${RABBITMQ_PASSWORD:}
+    virtual-host: ${RABBITMQ_VIRTUAL_HOST:/}
+
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+keycloak:
+  enabled: ${KEYCLOAK_ENABLED:false}
+  client-id: ${KEYCLOAK_CLIENT_ID:ecommerce-api}
+  realm-url: ${KEYCLOAK_REALM_URL:http://localhost:8180/realms/EcommerceRealm}
+  order-service-client-id: ${KEYCLOAK_ORDER_SERVICE_CLIENT_ID:ecommerce-api}
+  order-service-token-uri: ${KEYCLOAK_ORDER_SERVICE_TOKEN_URI:http://localhost:8180/realms/EcommerceRealm/protocol/openid-connect/token}
+  order-service-client-secret: ${KEYCLOAK_ORDER_SERVICE_CLIENT_SECRET:}
+
+payment:
+  currency: ${PAYMENT_CURRENCY:TND}
+  order-client:
+    mode: ${ORDER_CLIENT_MODE:local}
+    base-url: ${ORDER_SERVICE_BASE_URL:${ORDER_SERVICE_URL:http://localhost:8085}}
+    connect-timeout: ${ORDER_SERVICE_CONNECT_TIMEOUT:2s}
+    read-timeout: ${ORDER_SERVICE_READ_TIMEOUT:3s}
+    auth:
+      enabled: ${ORDER_SERVICE_AUTH_ENABLED:false}
+      token-url: ${KEYCLOAK_ORDER_SERVICE_TOKEN_URI:http://localhost:8180/realms/EcommerceRealm/protocol/openid-connect/token}
+      client-id: ${KEYCLOAK_ORDER_SERVICE_CLIENT_ID:ecommerce-api}
+      client-secret: ${KEYCLOAK_ORDER_SERVICE_CLIENT_SECRET:}
+  local-orders:
+    ids: ${LOCAL_ORDER_IDS:1001,1002}
+    amount: ${LOCAL_ORDER_AMOUNT:49.99}
+    currency: ${LOCAL_ORDER_CURRENCY:TND}
+  simulator:
+    declined-order-ids: ${SIMULATED_DECLINED_ORDER_IDS:1002}
+  messaging:
+    exchange: ${RABBITMQ_PAYMENT_EXCHANGE:payment.exchange}
+    routing-key: ${RABBITMQ_PAYMENT_ROUTING_KEY:payment.succeeded}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
