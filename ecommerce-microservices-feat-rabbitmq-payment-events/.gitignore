@@ -3,6 +3,11 @@
 .env
 .env.*
 !.env.example
+!.env.docker.example
+
+# Keycloak realm exports may contain users and credential data.
+/keycloak/realm-import/*
+!/keycloak/realm-import/.gitkeep
 
 # Python
 .venv/

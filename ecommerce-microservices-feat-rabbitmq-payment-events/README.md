@@ -14,7 +14,7 @@ Projet académique de microservices e-commerce :
 
 Le client appelle `Payment Service`. Celui-ci conserve la consultation et la validation REST de la commande auprès de `Order Service`, simule le paiement, puis enregistre le paiement dans MongoDB. Après l’enregistrement d’un paiement `SUCCEEDED`, il publie le JSON `PaymentSucceededEvent`.
 
-`Order Service` exécute un worker séparé qui consomme cet événement, vérifie la commande dans MySQL et applique uniquement la transition déjà autorisée `pending -> confirmed`. Un paiement `FAILED` ou `PENDING` ne publie aucun événement.
+Les documents du projet décrivent un worker Order séparé, mais le module `app.messaging` et son implémentation ne sont pas présents dans les sources actuelles. Aucun consommateur n'est donc lancé par ce dépôt ; le passage de la commande de `pending` à `confirmed` après événement n'est pas opérationnel dans cet état.
 
 ```text
 Client -> Payment Service --REST GET--> Order Service -> MySQL
@@ -22,18 +22,18 @@ Client -> Payment Service --REST GET--> Order Service -> MySQL
                    +-- JSON PaymentSucceededEvent
                        -> payment.exchange
                           -> payment.succeeded.queue
-                             -> Order worker -> MySQL
+                             -> consommateur Order (absent des sources)
 ```
 
-Le projet supporte maintenant un mode JWT Keycloak optionnel sur la Gateway et les microservices. Les paramètres doivent pointer vers `http://localhost:8180/realms/EcommerceRealm` avec le client `ecommerce-api`, et le realm doit exposer les rôles `admin` et `user`.
+La Gateway et Payment Service ont des décodeurs JWT Keycloak. Order Service n'a pas de validation JWT dans son code actuel, malgré les anciennes instructions de son README ; son port n'est donc pas publié par Compose. Le realm doit exposer l'audience `ecommerce-api` et les rôles `admin` et `user`.
 
-Le consommateur déclare de façon idempotente et durable :
+La configuration attendue par le consommateur décrit :
 
 - direct exchange : `payment.exchange`
 - queue : `payment.succeeded.queue`
 - routing key : `payment.succeeded`
 
-Le producteur publie vers l’exchange et ne déclare pas la queue. C’est différent de l’atelier utilisant directement l’exchange par défaut (`""`) avec le nom de queue comme routing key : ici l’exchange direct permet de faire évoluer les bindings sans coupler le producteur au nom de la queue.
+Le producteur ne déclare ni l'exchange ni la queue. En l'absence du worker, une nouvelle instance RabbitMQ n'a pas cette topologie : il faut rétablir l'implémentation du consommateur avant de valider le flux de paiement de bout en bout.
 
 ## Configurer RabbitMQ sous Windows
 
@@ -61,7 +61,7 @@ Vous pouvez vérifier le broker sur `http://localhost:15672` avec cet utilisateu
 
 ## Variables RabbitMQ
 
-Les deux services lisent les mêmes paramètres :
+Les paramètres prévus pour le producteur et le consommateur sont :
 
 ```text
 RABBITMQ_HOST=localhost
@@ -85,7 +85,7 @@ cd eureka-server\eureka-server
 mvn spring-boot:run
 ```
 
-### Order Service et worker
+### Order Service API
 
 ```powershell
 cd order-service\order-service
@@ -93,23 +93,11 @@ py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item .env.example .env
-$env:RABBITMQ_USERNAME = "ecommerce_app"
-$env:RABBITMQ_PASSWORD = "<mot-de-passe-local>"
 python -m app.init_db
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8085
 ```
 
-Dans un second terminal, avec le même environnement :
-
-```powershell
-cd order-service\order-service
-.\.venv\Scripts\Activate.ps1
-$env:RABBITMQ_USERNAME = "ecommerce_app"
-$env:RABBITMQ_PASSWORD = "<mot-de-passe-local>"
-python -m app.messaging.worker
-```
-
-Le worker est volontairement distinct du serveur FastAPI. À son démarrage, vérifiez dans Management que `payment.succeeded.queue` existe et contient `0` message en attente.
+Le worker décrit dans les versions précédentes de cette procédure n'est pas présent dans les sources actuelles. Les identifiants RabbitMQ ne sont donc pas nécessaires pour lancer l'API Order.
 
 ### Payment Service
 
@@ -147,7 +135,7 @@ Invoke-RestMethod -Method Post -Uri http://localhost:8084/api/payments `
     -ContentType "application/json" -Body $paymentBody
 ```
 
-Attendus : la réponse Payment contient `SUCCEEDED`, le log Java indique la publication, le log du worker indique la consommation, puis `GET http://localhost:8085/api/orders/$($order.id)` retourne `confirmed`. Dans Management, utilisez **Queues and Streams**, puis `payment.succeeded.queue` pour vérifier les messages prêts et les taux de publication/consommation. Un message consommé est ACKé et disparaît de la file.
+Payment Service publie un événement après un paiement `SUCCEEDED`, mais le worker Order absent ne le consomme pas. Le changement de statut vers `confirmed` n'est donc pas un résultat attendu tant que ce worker n'a pas été rétabli.
 
 ## Tests
 
@@ -170,4 +158,32 @@ Les tests unitaires ne prouvent pas une connexion réelle au broker. Le test de 
 
 ## Limite de cohérence
 
-La publication est effectuée après `MongoRepository.save`, mais sans transaction distribuée ni outbox. Si MongoDB confirme puis que RabbitMQ devient indisponible, le paiement reste enregistré et l’événement peut manquer. Le producteur journalise et remonte l’erreur ; une nouvelle requête avec la même clé d’idempotence tente de republier l’événement, et le consommateur rend les doublons inoffensifs lorsque la commande est déjà `confirmed`. Pour un système de production, une outbox MongoDB et un relay avec confirmations seraient nécessaires.
+La publication est effectuée après `MongoRepository.save`, mais sans transaction distribuée ni outbox. Si MongoDB confirme puis que RabbitMQ devient indisponible, le paiement reste enregistré et l'événement peut manquer. Le producteur journalise et remonte l'erreur ; une nouvelle requête avec la même clé d'idempotence tente de republier l'événement. Un consommateur devra rendre les doublons inoffensifs lorsque la commande est déjà `confirmed`. Pour un système de production, une outbox MongoDB et un relay avec confirmations seraient nécessaires.
+
+## Préparer Docker Compose
+
+Créez le fichier local de configuration puis remplacez toutes les valeurs `CHANGE_ME` avant le démarrage :
+
+```powershell
+Copy-Item .env.docker.example .env.docker
+```
+
+Le realm `EcommerceRealm` n'est pas exporté dans le dépôt. Après avoir arrêté l'instance Keycloak locale, exportez son realm et ses utilisateurs (adaptez le chemin d'installation et conservez la même configuration de base de données que l'instance locale) :
+
+```powershell
+$KeycloakHome = "C:\chemin\vers\keycloak"
+$ExportDir = Join-Path (Get-Location) "keycloak\realm-import"
+New-Item -ItemType Directory -Force $ExportDir | Out-Null
+& (Join-Path $KeycloakHome "bin\kc.bat") export `
+    --dir $ExportDir --realm EcommerceRealm --users different_files
+```
+
+L'export peut contenir des données d'utilisateurs et des empreintes d'identifiants ; les fichiers du répertoire d'import sont ignorés par Git et montés en lecture seule, pas copiés dans les images. Les identifiants `KEYCLOAK_ADMIN_*` du fichier local sont des valeurs de bootstrap à choisir ; aucun compte de realm n'est ajouté par Compose. Vérifiez que l'image Keycloak choisie est compatible avec la version de l'instance ayant produit l'export.
+
+Après création et édition de `.env.docker`, validez la configuration sans démarrer les services :
+
+```powershell
+docker compose --env-file .env.docker config --quiet
+```
+
+Le service `order-worker` n'est volontairement pas déclaré : son implémentation est absente des sources actuelles.

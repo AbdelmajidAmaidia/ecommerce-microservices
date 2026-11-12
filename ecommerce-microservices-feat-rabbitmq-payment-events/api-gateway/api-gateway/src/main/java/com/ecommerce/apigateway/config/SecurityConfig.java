@@ -33,10 +33,11 @@ public class SecurityConfig {
     @Bean
     public ReactiveJwtDecoder jwtDecoder(
             @Value("${keycloak.realm-url:http://localhost:8180/realms/EcommerceRealm}") String realmUrl,
-            @Value("${keycloak.client-id:ecommerce-api}") String clientId
+            @Value("${keycloak.client-id:ecommerce-api}") String clientId,
+            @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:http://localhost:8180/realms/EcommerceRealm/protocol/openid-connect/certs}") String jwkSetUri
     ) {
         NimbusReactiveJwtDecoder decoder = NimbusReactiveJwtDecoder.withJwkSetUri(
-                realmUrl + "/protocol/openid-connect/certs"
+                jwkSetUri
         ).build();
 
         OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(

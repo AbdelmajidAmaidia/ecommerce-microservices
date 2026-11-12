@@ -36,10 +36,11 @@ public class SecurityConfig {
     @Bean
     public JwtDecoder jwtDecoder(
             @Value("${keycloak.realm-url:http://localhost:8180/realms/EcommerceRealm}") String realmUrl,
-            @Value("${keycloak.client-id:ecommerce-api}") String clientId
+            @Value("${keycloak.client-id:ecommerce-api}") String clientId,
+            @Value("${spring.security.oauth2.resourceserver.jwt.jwk-set-uri:http://localhost:8180/realms/EcommerceRealm/protocol/openid-connect/certs}") String jwkSetUri
     ) {
         NimbusJwtDecoder decoder = NimbusJwtDecoder.withJwkSetUri(
-                realmUrl + "/protocol/openid-connect/certs"
+                jwkSetUri
         ).build();
 
         OAuth2TokenValidator<Jwt> validator = new DelegatingOAuth2TokenValidator<>(
@@ -61,20 +62,23 @@ public class SecurityConfig {
 
     @Bean
     public Converter<Jwt, List<GrantedAuthority>> keycloakGrantedAuthoritiesConverter() {
-        return jwt -> {
-            Object realmAccess = jwt.getClaim("realm_access");
-            if (!(realmAccess instanceof Map<?, ?> access)) {
-                return List.of();
+        return new Converter<Jwt, List<GrantedAuthority>>() {
+            @Override
+            public List<GrantedAuthority> convert(Jwt jwt) {
+                Object realmAccess = jwt.getClaim("realm_access");
+                if (!(realmAccess instanceof Map<?, ?> access)) {
+                    return List.of();
+                }
+                Object roles = access.get("roles");
+                if (!(roles instanceof List<?> roleList)) {
+                    return List.of();
+                }
+                return roleList.stream()
+                        .filter(String.class::isInstance)
+                        .map(String.class::cast)
+                        .map(role -> (GrantedAuthority) new SimpleGrantedAuthority("ROLE_" + role))
+                        .toList();
             }
-            Object roles = access.get("roles");
-            if (!(roles instanceof List<?> roleList)) {
-                return List.of();
-            }
-            return roleList.stream()
-                    .filter(String.class::isInstance)
-                    .map(String.class::cast)
-                    .map(role -> (GrantedAuthority) new SimpleGrantedAuthority("ROLE_" + role))
-                    .toList();
         };
     }
 

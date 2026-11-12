@@ -154,28 +154,8 @@ Les tables sont créées explicitement avec `python -m app.init_db`, après conf
 
 ## Sécurité Keycloak
 
-Le service FastAPI valide les JWT Keycloak lorsque la variable `KEYCLOAK_ENABLED=true` est définie. Les paramètres attendus sont :
-
-```powershell
-$env:KEYCLOAK_ENABLED = "true"
-$env:KEYCLOAK_REALM_URL = "http://localhost:8180/realms/EcommerceRealm"
-$env:KEYCLOAK_CLIENT_ID = "ecommerce-api"
-```
-
-Le service vérifie cryptographiquement la signature avec le JWKS de Keycloak, puis contrôle `iss`, `exp`, `aud` et les rôles `realm_access.roles` mappés en autorisations `user`/`admin`. Les routes `/api/orders` et `/api/orders/{order_id}` exigent un token valide avec rôle `user` ou `admin`. La mutation `PATCH /api/orders/{order_id}/status` exige le rôle `admin`.
-
-Le service ne peut pas vérifier la propriété d'une commande à partir du token seul, car le modèle contient `customer_id` mais pas d'assertion d'appartenance liée à la session OAuth2. L'implémentation conserve donc le contrôle de rôle sans inventer d'autorisation métier supplémentaire.
+Le code FastAPI actuel ne contient pas de décodeur JWT ni de dépendance d'authentification sur les routes. Les instructions Keycloak précédentes ne correspondent pas à cette version du code ; une protection configurée sur la Gateway ne remplace pas la validation côté service si Order Service est exposé directement.
 
 ## Worker RabbitMQ
 
-Le worker `app.messaging.worker` consomme les événements JSON `PaymentSucceededEvent` sur `payment.succeeded.queue`. Il déclare durablement l'exchange direct `payment.exchange`, la queue et son binding, puis confirme une commande avec la transition métier existante `pending -> confirmed`.
-
-Lancez-le dans un terminal séparé du serveur HTTP :
-
-```powershell
-$env:RABBITMQ_USERNAME = "ecommerce_app"
-$env:RABBITMQ_PASSWORD = "<mot-de-passe-local>"
-python -m app.messaging.worker
-```
-
-Les messages JSON invalides et les commandes inconnues sont ACKés avec un log explicite afin d'éviter une boucle infinie. Les erreurs SQL temporaires sont retentées au maximum `RABBITMQ_MAX_RETRIES` fois (3 par défaut), puis rejetées. Les variables `RABBITMQ_*` sont listées dans `.env.example`.
+Les tests RabbitMQ et les anciennes instructions font référence à `app.messaging.rabbitmq` et `app.messaging.worker`, mais ces modules ne sont pas présents dans les sources actuelles. Aucun consommateur RabbitMQ exécutable n'est donc fourni par ce service dans cette version.
